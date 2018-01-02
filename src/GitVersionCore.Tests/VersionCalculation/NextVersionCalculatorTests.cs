@@ -118,6 +118,152 @@
         }
 
         [Test]
+        public void Experiment_with_mainline_1()
+        {
+            var config = new Config
+            {
+                NextVersion = "0.1.0",
+                VersioningMode = VersioningMode.Mainline
+            };
+
+            using (var fixture = new EmptyRepositoryFixture())
+            {
+                // Start with a blank repository, create a single commit into 'master' branch
+                fixture.MakeACommit();
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.AssertFullSemver(config, "0.1.0");
+
+                // Create the 'development' branch, add a commit
+                fixture.BranchTo("development");
+                fixture.AssertFullSemver(config, "0.1.0-alpha.0");
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.0-alpha.1");
+
+                // Merge development back into the master branch
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.AssertFullSemver(config, "0.1.0");
+                fixture.MergeNoFF("development");
+                fixture.AssertFullSemver(config, "0.2.0");
+
+                // Create a feature branch off of development, start making commits
+                Commands.Checkout(fixture.Repository, "development");
+                fixture.AssertFullSemver(config, "0.1.0-alpha.1");
+                fixture.BranchTo("issue1");
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.2-issue1.2");
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.2-issue1.3");
+
+                // Merge feature branch into development, without squashing commits
+                Commands.Checkout(fixture.Repository, "development");
+                fixture.MergeNoFF("issue1");
+                fixture.AssertFullSemver(config, "0.1.0-alpha.5");
+
+                // Merge 'development' into 'master'
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.MergeNoFF("development");
+                fixture.AssertFullSemver(config, "0.3.0");
+            }
+        }
+
+        [Test]
+        public void Experiment_with_mainline_2_only_master_branch_increment_patch()
+        {
+            var config = new Config
+            {
+                NextVersion = "0.1.0",
+                VersioningMode = VersioningMode.Mainline,
+                Increment = IncrementStrategy.Patch,
+            };
+
+            using (var fixture = new EmptyRepositoryFixture())
+            {
+                // Start with a blank repository, create a single commit into 'master' branch
+                fixture.MakeACommit();
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.AssertFullSemver(config, "0.1.0");
+
+                // Create a feature branch off of master, start making commits
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.AssertFullSemver(config, "0.1.0");
+                fixture.BranchTo("issue1");
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.1-issue1.2");
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.1-issue1.3");
+
+                // Merge feature branch into master, without squashing commits
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.MergeNoFF("issue1");
+                fixture.AssertFullSemver(config, "0.1.1");
+
+                // Create another feature branch off of master, start making commits
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.AssertFullSemver(config, "0.1.1");
+                fixture.BranchTo("issue2a");
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.2-issue2a.3");
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.2-issue2a.5");
+
+                // Start a parallel feature branch off of master, start making commits
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.AssertFullSemver(config, "0.1.1");
+                fixture.BranchTo("issue2b");
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.2-issue2b.2");
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.1.2-issue2b.4");
+
+                // Merge 2B branch, then merge 2A branch
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.MergeNoFF("issue2b");
+                fixture.AssertFullSemver(config, "0.1.2");
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.MergeNoFF("issue2a");
+                fixture.AssertFullSemver(config, "0.1.3");
+
+                // Increment minor version with commit message
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.MakeACommit("+semver:minor");
+                fixture.AssertFullSemver(config, "0.2.0");
+
+                // Start a feature branch off of master, start making commits
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.AssertFullSemver(config, "0.2.0");
+                fixture.BranchTo("issue3");
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.2.1-issue3.2");
+                fixture.MakeACommit();
+                fixture.MakeACommit();
+                fixture.AssertFullSemver(config, "0.2.1-issue3.4");
+
+                // Merge feature branch into master, without squashing commits
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.MergeNoFF("issue3");
+                fixture.AssertFullSemver(config, "0.2.1");
+
+                // Increment major version with commit message
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.MakeACommit("+semver:major");
+                fixture.AssertFullSemver(config, "1.0.0");
+
+                // Change version using a tag on the mainline branch
+                Commands.Checkout(fixture.Repository, "master");
+                fixture.ApplyTag("2.0.0");
+                fixture.AssertFullSemver(config, "2.0.0");
+            }
+        }
+
+        [Test]
         public void PreReleaseNumberShouldBeScopeToPreReleaseLabelInContinuousDelivery()
         {
             var config = new Config
